@@ -1,0 +1,13 @@
+# DuelsPlugin configuration
+
+countdown-seconds: 5
+challenge-expiry-seconds: 30
+default-rounds-to-win: 1
+keep-inventory-during-duel: true   # kit items only, restored after
+disable-food-loss: false
+messages-prefix: "&8[&cDuels&8] &r"
+
+spectator:
+  # where eliminated players are teleported while the match finishes
+  # falls back to arena spawn1 (up 5 blocks) if unset per-arena
+  y-offset: 5
