@@ -41,12 +41,6 @@
             <artifactId>worldedit-bukkit</artifactId>
             <version>7.3.6</version>
             <scope>provided</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>*</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
     </dependencies>
 
