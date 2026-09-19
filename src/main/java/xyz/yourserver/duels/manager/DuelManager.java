@@ -11,7 +11,6 @@ import xyz.yourserver.duels.model.DuelState;
 import xyz.yourserver.duels.model.Kit;
 import xyz.yourserver.duels.util.Msg;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -130,7 +129,7 @@ public class DuelManager {
         // teleport + equip immediately so players can see each other during the countdown
         teleportAndEquip(session);
 
-        BukkitRunnable task = new BukkitRunnable() {
+        org.bukkit.scheduler.BukkitTask task = new BukkitRunnable() {
             int remaining = seconds;
 
             @Override
