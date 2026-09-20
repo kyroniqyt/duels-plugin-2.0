@@ -12,6 +12,7 @@ import xyz.yourserver.duels.manager.DuelManager;
 import xyz.yourserver.duels.manager.KitManager;
 import xyz.yourserver.duels.manager.PartyManager;
 import xyz.yourserver.duels.manager.QueueManager;
+import xyz.yourserver.duels.bot.BotManager;
 import xyz.yourserver.duels.util.Msg;
 import xyz.yourserver.duels.util.SchematicUtil;
 
@@ -22,6 +23,7 @@ public class DuelsPlugin extends JavaPlugin {
     private DuelManager duelManager;
     private QueueManager queueManager;
     private PartyManager partyManager;
+    private BotManager botManager;
 
     @Override
     public void onEnable() {
@@ -35,6 +37,7 @@ public class DuelsPlugin extends JavaPlugin {
         duelManager = new DuelManager(this);
         queueManager = new QueueManager(this);
         partyManager = new PartyManager(this);
+        botManager = new BotManager(this);
 
         getCommand("duel").setExecutor(new DuelCommand(this));
         getCommand("duelkit").setExecutor(new DuelKitCommand(this));
@@ -46,6 +49,9 @@ public class DuelsPlugin extends JavaPlugin {
 
         if (!SchematicUtil.isAvailable()) {
             getLogger().warning("WorldEdit/FAWE not found — arena auto-restore will fail until it's installed.");
+        }
+        if (!BotManager.isCitizensAvailable()) {
+            getLogger().warning("Citizens not found — /duel bot will fail until it's installed.");
         }
 
         getLogger().info("DuelsPlugin enabled.");
@@ -74,5 +80,9 @@ public class DuelsPlugin extends JavaPlugin {
 
     public PartyManager getPartyManager() {
         return partyManager;
+    }
+
+    public BotManager getBotManager() {
+        return botManager;
     }
 }

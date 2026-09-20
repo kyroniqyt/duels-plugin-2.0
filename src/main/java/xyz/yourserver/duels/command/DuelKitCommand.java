@@ -27,7 +27,7 @@ public class DuelKitCommand implements CommandExecutor {
             return true;
         }
         if (args.length == 0) {
-            Msg.send(player, "&7Usage: /duelkit <create|delete|list> [name]");
+            Msg.send(player, "&7Usage: /duelkit <create|delete|list|give> [name]");
             return true;
         }
 
@@ -55,6 +55,19 @@ public class DuelKitCommand implements CommandExecutor {
                 } else {
                     Msg.send(player, "&7Kits: &f" + String.join("&7, &f", plugin.getKitManager().getKits().keySet()));
                 }
+            }
+            case "give" -> {
+                if (args.length < 2) {
+                    Msg.send(player, "&cUsage: /duelkit give <name>");
+                    return true;
+                }
+                Kit kit = plugin.getKitManager().getKit(args[1]);
+                if (kit == null) {
+                    Msg.send(player, "&cNo such kit.");
+                    return true;
+                }
+                kit.applyTo(player);
+                Msg.send(player, "&aEquipped kit &f" + kit.getName() + "&a.");
             }
             default -> Msg.send(player, "&7Usage: /duelkit <create|delete|list> [name]");
         }

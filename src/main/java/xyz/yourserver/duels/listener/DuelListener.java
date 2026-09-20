@@ -26,6 +26,11 @@ public class DuelListener implements Listener {
      */
     @EventHandler(priority = EventPriority.HIGH)
     public void onDamage(EntityDamageEvent event) {
+        if (plugin.getBotManager().isBotEntity(event.getEntity())) {
+            handleBotDamage(event);
+            return;
+        }
+
         if (!(event.getEntity() instanceof Player player)) return;
 
         DuelSession session = plugin.getDuelManager().getSession(player);
@@ -47,6 +52,26 @@ public class DuelListener implements Listener {
             if (healthAfter <= 0) {
                 event.setCancelled(true);
                 plugin.getDuelManager().handleElimination(player);
+            }
+        }
+    }
+
+    /** Bots don't have a real Bukkit health pool we trust for elimination —
+     * we always cancel the real damage and track a virtual health value
+     * ourselves in DuelManager, only counting hits from the bot's actual
+     * opponent in an active session. */
+    private void handleBotDamage(EntityDamageEvent event) {
+        var bot = plugin.getBotManager().getBotByEntity(event.getEntity());
+        if (bot == null) return;
+
+        event.setCancelled(true);
+
+        if (event instanceof EntityDamageByEntityEvent byEntity && byEntity.getDamager() instanceof Player attacker) {
+            DuelSession session = bot.getSession();
+            boolean valid = session != null && session.getState() == DuelState.ACTIVE
+                    && session.containsPlayer(attacker.getUniqueId());
+            if (valid) {
+                plugin.getDuelManager().damageBot(bot, event.getFinalDamage());
             }
         }
     }

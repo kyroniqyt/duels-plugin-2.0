@@ -11,6 +11,7 @@ import xyz.yourserver.duels.model.DuelState;
 import xyz.yourserver.duels.model.Kit;
 import xyz.yourserver.duels.util.Msg;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -151,17 +152,23 @@ public class DuelManager {
     private void teleportAndEquip(DuelSession session) {
         Arena arena = session.getArena();
         for (UUID uuid : session.getSideA()) {
-            Player p = Bukkit.getPlayer(uuid);
-            if (p == null) continue;
-            p.teleport(arena.getSpawn1());
-            resetForDuel(p, session.getKit());
+            setUpParticipant(uuid, session, arena.getSpawn1());
         }
         for (UUID uuid : session.getSideB()) {
-            Player p = Bukkit.getPlayer(uuid);
-            if (p == null) continue;
-            p.teleport(arena.getSpawn2());
-            resetForDuel(p, session.getKit());
+            setUpParticipant(uuid, session, arena.getSpawn2());
         }
+    }
+
+    private void setUpParticipant(UUID uuid, DuelSession session, org.bukkit.Location spawn) {
+        var bot = plugin.getBotManager().getBotByUuid(uuid);
+        if (bot != null) {
+            bot.startAi(plugin, session, spawn);
+            return;
+        }
+        Player p = Bukkit.getPlayer(uuid);
+        if (p == null) return;
+        p.teleport(spawn);
+        resetForDuel(p, session.getKit());
     }
 
     private void resetForDuel(Player p, Kit kit) {
@@ -194,6 +201,38 @@ public class DuelManager {
         }
     }
 
+    /**
+     * Called by the combat listener when a bot would otherwise die. Bot
+     * health is tracked here rather than relying on the NPC entity's real
+     * health, so elimination behaves identically to a real player's.
+     */
+    public void damageBot(xyz.yourserver.duels.bot.DuelBot bot, double amount) {
+        DuelSession session = bot.getSession();
+        if (session == null || session.getState() != DuelState.ACTIVE) return;
+
+        bot.setHealth(bot.getHealth() - amount);
+        if (bot.getHealth() <= 0) {
+            handleBotElimination(bot);
+        }
+    }
+
+    public void handleBotElimination(xyz.yourserver.duels.bot.DuelBot bot) {
+        DuelSession session = bot.getSession();
+        if (session == null || session.getState() != DuelState.ACTIVE) return;
+
+        UUID botUuid = bot.getEntityUuid();
+        int side = session.sideOf(botUuid);
+        if (side == 1) session.getAliveA().remove(botUuid);
+        if (side == 2) session.getAliveB().remove(botUuid);
+
+        bot.stopAi();
+        broadcast(session, "&c" + bot.getDisplayName() + " &7has been eliminated.");
+
+        if (session.isMatchOver()) {
+            finishSession(session);
+        }
+    }
+
     private void finishSession(DuelSession session) {
         session.setState(DuelState.ENDING);
         int winnerSide = session.roundWinnerSide();
@@ -220,6 +259,11 @@ public class DuelManager {
         Arena arena = session.getArena();
         for (UUID uuid : session.allParticipants()) {
             playerSessions.remove(uuid);
+            var bot = plugin.getBotManager().getBotByUuid(uuid);
+            if (bot != null) {
+                plugin.getBotManager().removeBot(bot);
+                continue;
+            }
             Player p = Bukkit.getPlayer(uuid);
             if (p != null) {
                 p.setGameMode(GameMode.SURVIVAL);
