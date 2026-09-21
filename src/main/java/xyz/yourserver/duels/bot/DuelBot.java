@@ -121,10 +121,14 @@ public class DuelBot {
         double distance = npcLoc.distance(target.getLocation());
 
         if (distance > difficulty.getAttackRange()) {
-            Path path = PathfindingUtils.findPath(List.of(npcLoc, target.getLocation()), 10_000, true, null);
-            if (path != null) {
-                npc.walkTo(path, 0.4, true, result -> {
-                });
+            try {
+                Path path = PathfindingUtils.findPath(List.of(npcLoc, target.getLocation()), 10_000, true, null);
+                if (path != null) {
+                    npc.walkTo(path, 0.4, true, result -> {
+                    });
+                }
+            } catch (Exception ignored) {
+                // pathfinding failed this tick (e.g. no clear route yet) — just try again next tick
             }
         } else {
             long now = System.currentTimeMillis();
