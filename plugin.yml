@@ -1,0 +1,28 @@
+name: DuelsPlugin
+version: '1.0.0'
+main: xyz.yourserver.duels.DuelsPlugin
+api-version: '1.21'
+softdepend: [WorldEdit, FastAsyncWorldEdit]
+author: YourServer
+
+commands:
+  duel:
+    description: Challenge, queue, accept or deny duels
+    usage: /duel <player|queue|accept|deny|leavequeue|kits> [kit]
+  duelkit:
+    description: Manage duel kits
+    usage: /duelkit <create|delete|list> [name]
+  duelarena:
+    description: Manage duel arenas
+    usage: /duelarena <create|pos1|pos2|setspawn1|setspawn2|save|list> [name]
+  party:
+    description: Party management and party duels/FFA
+    usage: /party <create|invite|accept|leave|kick|ffa|duel> [target/kit]
+
+permissions:
+  duels.admin:
+    description: Access to kit and arena administration
+    default: op
+  duels.use:
+    description: Access to core duel/party commands
+    default: true
