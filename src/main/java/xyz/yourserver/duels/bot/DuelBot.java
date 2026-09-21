@@ -76,7 +76,7 @@ public class DuelBot {
         stopAi();
 
         if (npc == null) {
-            npc = new NPC(spawnAt, NpcName.ofLegacy("&cBot"));
+            npc = new NPC(spawnAt, NpcName.empty());
             npc.setEnabled(true);
             npc.showNpcToAllPlayers();
             npc.setClickEvent(event -> {
