@@ -1,6 +1,5 @@
 package xyz.yourserver.duels.bot;
 
-import de.eisi05.npc.api.ai.goals.AttackEntityGoal;
 import de.eisi05.npc.api.enums.ClickActionType;
 import de.eisi05.npc.api.objects.NPC;
 import de.eisi05.npc.api.objects.NpcName;
@@ -15,13 +14,12 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * A bot opponent backed by an NpcAPI NPC, using the library's own
- * AttackEntityGoal for movement + attacking (a built-in "chase and attack"
- * behavior) rather than a hand-rolled tick loop — that hand-rolled version
- * caused jittery movement and out-of-range hits. Player-hits-bot detection
- * still goes through the NPC's own click event, since NpcAPI is
- * packet-based and has no real server-side entity to fire damage events
- * for; bot health is tracked virtually here.
+ * A bot opponent backed by an NpcAPI NPC. Movement + attacking is a custom
+ * BotAttackGoal plugged into the NPC's own goal system (goals run
+ * automatically once added — there's no manual start/stop needed).
+ * Player-hits-bot detection goes through the NPC's own click event, since
+ * NpcAPI is packet-based and has no real server-side entity to fire damage
+ * events for; bot health is tracked virtually here.
  */
 public class DuelBot {
 
@@ -33,7 +31,7 @@ public class DuelBot {
     private double health = maxHealth;
     private DuelSession session;
     private DuelsPlugin plugin;
-    private AttackEntityGoal attackGoal;
+    private BotAttackGoal attackGoal;
 
     public DuelBot(BotDifficulty difficulty) {
         this.difficulty = difficulty;
@@ -100,19 +98,20 @@ public class DuelBot {
         if (opponent == null) return;
 
         UUID opponentUuid = opponent.getUniqueId();
-        attackGoal = new AttackEntityGoal(entity -> entity instanceof Player p && p.getUniqueId().equals(opponentUuid));
+        attackGoal = new BotAttackGoal(
+                () -> Bukkit.getPlayer(opponentUuid),
+                difficulty.getAttackRange(),
+                difficulty.getAttackDamage(),
+                difficulty.getAttackCooldownMillis());
         npc.addGoal(attackGoal);
-        npc.getGoalSelector().start();
     }
 
     /** Stops the bot from acting (match over, or about to be repositioned for a new one). */
     public void disengage() {
-        if (npc == null) return;
-        npc.getGoalSelector().stop();
-        if (attackGoal != null) {
+        if (npc != null && attackGoal != null) {
             npc.removeGoal(attackGoal);
-            attackGoal = null;
         }
+        attackGoal = null;
     }
 
     /** Fully removes the NPC (called once its final duel has ended). */
