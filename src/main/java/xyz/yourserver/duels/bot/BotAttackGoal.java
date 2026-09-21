@@ -100,4 +100,9 @@ public class BotAttackGoal extends Goal {
     protected boolean canBeInterrupted(@NotNull NPC npc) {
         return true;
     }
+
+    @Override
+    public Goal copy() {
+        return new BotAttackGoal(targetSupplier, attackRange, attackDamage, attackCooldownMillis);
+    }
 }
