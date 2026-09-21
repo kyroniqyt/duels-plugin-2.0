@@ -145,4 +145,25 @@ public class ArenaManager {
 
         SchematicUtil.restore(source, min);
     }
+
+    /**
+     * Removes stray arrows/tridents and dropped items left inside the arena
+     * from the last duel (block restore handles the terrain, but not
+     * entities). Safe to call even if the arena isn't fully configured.
+     */
+    public void clearLeftoverEntities(Arena arena) {
+        if (arena.getWorld() == null || arena.getPos1() == null || arena.getPos2() == null) return;
+
+        org.bukkit.util.BoundingBox box = org.bukkit.util.BoundingBox.of(arena.getPos1(), arena.getPos2());
+        for (org.bukkit.entity.Entity entity : arena.getWorld().getEntities()) {
+            if (entity instanceof org.bukkit.entity.Player) continue;
+            if (!box.contains(entity.getLocation().toVector())) continue;
+
+            if (entity instanceof org.bukkit.entity.Projectile
+                    || entity instanceof org.bukkit.entity.Item
+                    || entity instanceof org.bukkit.entity.ThrownPotion) {
+                entity.remove();
+            }
+        }
+    }
 }

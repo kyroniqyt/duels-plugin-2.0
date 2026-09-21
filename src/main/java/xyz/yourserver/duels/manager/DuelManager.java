@@ -1,5 +1,9 @@
 package xyz.yourserver.duels.manager;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
@@ -11,7 +15,6 @@ import xyz.yourserver.duels.model.DuelState;
 import xyz.yourserver.duels.model.Kit;
 import xyz.yourserver.duels.util.Msg;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -46,8 +49,21 @@ public class DuelManager {
     public void issueChallenge(Player challenger, Player target, Kit kit) {
         long expiry = System.currentTimeMillis() + (plugin.getConfig().getInt("challenge-expiry-seconds", 30) * 1000L);
         pendingChallenges.put(target.getUniqueId(), new Challenge(challenger.getUniqueId(), kit, expiry));
-        Msg.send(target, "&e" + challenger.getName() + " &7has challenged you to a duel (kit: &f" + kit.getName()
-                + "&7). Type &a/duel accept &7or &c/duel deny&7.");
+
+        Component challengeMsg = Component.text(challenger.getName() + " has challenged you to a duel (kit: " + kit.getName() + ").")
+                .color(NamedTextColor.YELLOW)
+                .appendNewline()
+                .append(Component.text("[Click to accept]")
+                        .color(NamedTextColor.GREEN)
+                        .decorate(TextDecoration.BOLD)
+                        .clickEvent(ClickEvent.runCommand("/duel accept")))
+                .append(Component.text("  "))
+                .append(Component.text("[Click to deny]")
+                        .color(NamedTextColor.RED)
+                        .decorate(TextDecoration.BOLD)
+                        .clickEvent(ClickEvent.runCommand("/duel deny")));
+        target.sendMessage(challengeMsg);
+
         Msg.send(challenger, "&7Challenge sent to &e" + target.getName() + "&7.");
     }
 
@@ -138,6 +154,7 @@ public class DuelManager {
                 if (remaining <= 0) {
                     session.setState(DuelState.ACTIVE);
                     broadcast(session, "&aFight!");
+                    engageBots(session);
                     cancel();
                     return;
                 }
@@ -147,6 +164,16 @@ public class DuelManager {
         }.runTaskTimer(plugin, 0L, 20L);
 
         session.setActiveTask(task);
+    }
+
+    /** Bots don't start chasing/attacking until the countdown actually ends. */
+    private void engageBots(DuelSession session) {
+        for (UUID uuid : session.allParticipants()) {
+            var bot = plugin.getBotManager().getBotByUuid(uuid);
+            if (bot != null) {
+                bot.engage();
+            }
+        }
     }
 
     private void teleportAndEquip(DuelSession session) {
@@ -162,7 +189,7 @@ public class DuelManager {
     private void setUpParticipant(UUID uuid, DuelSession session, org.bukkit.Location spawn) {
         var bot = plugin.getBotManager().getBotByUuid(uuid);
         if (bot != null) {
-            bot.startAi(plugin, session, spawn);
+            bot.prepareForMatch(plugin, session, spawn);
             return;
         }
         Player p = Bukkit.getPlayer(uuid);
@@ -225,7 +252,7 @@ public class DuelManager {
         if (side == 1) session.getAliveA().remove(botUuid);
         if (side == 2) session.getAliveB().remove(botUuid);
 
-        bot.stopAi();
+        bot.disengage();
         broadcast(session, "&c" + bot.getDisplayName() + " &7has been eliminated.");
 
         if (session.isMatchOver()) {
@@ -277,6 +304,7 @@ public class DuelManager {
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to restore arena '" + arena.getName() + "': " + e.getMessage());
         } finally {
+            plugin.getArenaManager().clearLeftoverEntities(arena);
             arena.setInUse(false);
         }
     }

@@ -1,30 +1,27 @@
 package xyz.yourserver.duels.bot;
 
+import de.eisi05.npc.api.ai.goals.AttackEntityGoal;
+import de.eisi05.npc.api.enums.ClickActionType;
 import de.eisi05.npc.api.objects.NPC;
 import de.eisi05.npc.api.objects.NpcName;
-import de.eisi05.npc.api.pathfinding.Path;
-import de.eisi05.npc.api.pathfinding.PathfindingUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.scheduler.BukkitTask;
 import xyz.yourserver.duels.DuelsPlugin;
 import xyz.yourserver.duels.model.DuelSession;
 import xyz.yourserver.duels.model.DuelState;
 
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * A bot opponent backed by an NpcAPI NPC. NpcAPI is packet-based (no real
- * server-side entity), so combat can't rely on ordinary Bukkit damage
- * events — instead this listens directly to the NPC's own left-click
- * (attack) event and tracks a virtual health value here, the same way
- * DuelManager tracks it. The NPC itself is only created once we know the
- * exact arena spawn point it should appear at, avoiding any need to
- * "teleport" an already-spawned NPC.
+ * A bot opponent backed by an NpcAPI NPC, using the library's own
+ * AttackEntityGoal for movement + attacking (a built-in "chase and attack"
+ * behavior) rather than a hand-rolled tick loop — that hand-rolled version
+ * caused jittery movement and out-of-range hits. Player-hits-bot detection
+ * still goes through the NPC's own click event, since NpcAPI is
+ * packet-based and has no real server-side entity to fire damage events
+ * for; bot health is tracked virtually here.
  */
 public class DuelBot {
 
@@ -36,8 +33,7 @@ public class DuelBot {
     private double health = maxHealth;
     private DuelSession session;
     private DuelsPlugin plugin;
-    private BukkitTask aiTask;
-    private long lastAttackMillis = 0L;
+    private AttackEntityGoal attackGoal;
 
     public DuelBot(BotDifficulty difficulty) {
         this.difficulty = difficulty;
@@ -68,78 +64,73 @@ public class DuelBot {
         return session;
     }
 
-    /** Creates (first time) or is called again to restart AI for a new match at the given spawn point. */
-    public void startAi(DuelsPlugin plugin, DuelSession session, Location spawnAt) {
+    /**
+     * Spawns (first time) or repositions the NPC for a new match, and
+     * resets its health. Does NOT start attacking yet — call engage()
+     * once the countdown ends, so the bot doesn't hit the player before
+     * "Fight!".
+     */
+    public void prepareForMatch(DuelsPlugin plugin, DuelSession session, Location spawnAt) {
         this.plugin = plugin;
         this.session = session;
         setHealth(maxHealth);
-        stopAi();
+        disengage();
 
         if (npc == null) {
             npc = new NPC(spawnAt, NpcName.empty());
             npc.setEnabled(true);
             npc.showNpcToAllPlayers();
             npc.setClickEvent(event -> {
-                if (event.getAction() != de.eisi05.npc.api.enums.ClickActionType.LEFT) return;
+                if (event.getAction() != ClickActionType.LEFT) return;
                 Player attacker = event.getPlayer();
                 if (this.session == null || this.session.getState() != DuelState.ACTIVE) return;
                 if (!this.session.containsPlayer(attacker.getUniqueId())) return;
-                if (attacker.getLocation().distance(npc.getLocation()) > 5.0) return;
                 this.plugin.getDuelManager().damageBot(this, 2.0);
             });
+        } else {
+            npc.setLocation(spawnAt);
+            npc.reload();
         }
-
-        aiTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 20L, 10L);
     }
 
-    public void stopAi() {
-        if (aiTask != null) {
-            aiTask.cancel();
-            aiTask = null;
+    /** Starts the bot actually chasing and attacking its opponent. Call once the countdown ends. */
+    public void engage() {
+        if (npc == null || session == null) return;
+        Player opponent = findOpponent();
+        if (opponent == null) return;
+
+        UUID opponentUuid = opponent.getUniqueId();
+        attackGoal = new AttackEntityGoal(entity -> entity instanceof Player p && p.getUniqueId().equals(opponentUuid));
+        npc.addGoal(attackGoal);
+        npc.getGoalSelector().start();
+    }
+
+    /** Stops the bot from acting (match over, or about to be repositioned for a new one). */
+    public void disengage() {
+        if (npc == null) return;
+        npc.getGoalSelector().stop();
+        if (attackGoal != null) {
+            npc.removeGoal(attackGoal);
+            attackGoal = null;
         }
     }
 
     /** Fully removes the NPC (called once its final duel has ended). */
     public void remove() {
-        stopAi();
+        disengage();
         if (npc != null) {
-            npc.setEnabled(false);
-        }
-    }
-
-    private void tick() {
-        if (session == null || session.getState() != DuelState.ACTIVE || health <= 0 || npc == null) {
-            return;
-        }
-
-        Player target = findTarget();
-        if (target == null || !target.isOnline()) {
-            return;
-        }
-
-        Location npcLoc = npc.getLocation();
-        double distance = npcLoc.distance(target.getLocation());
-
-        if (distance > difficulty.getAttackRange()) {
             try {
-                Path path = PathfindingUtils.findPath(List.of(npcLoc, target.getLocation()), 10_000, true, null);
-                if (path != null) {
-                    npc.walkTo(path, 0.4, true, result -> {
-                    });
+                npc.delete();
+            } catch (Exception e) {
+                if (plugin != null) {
+                    plugin.getLogger().warning("Failed to delete duel bot NPC: " + e.getMessage());
                 }
-            } catch (Exception ignored) {
-                // pathfinding failed this tick (e.g. no clear route yet) — just try again next tick
             }
-        } else {
-            long now = System.currentTimeMillis();
-            if (now - lastAttackMillis >= difficulty.getAttackCooldownMillis()) {
-                lastAttackMillis = now;
-                target.damage(difficulty.getAttackDamage());
-            }
+            npc = null;
         }
     }
 
-    private Player findTarget() {
+    private Player findOpponent() {
         int mySide = session.sideOf(id);
         Set<UUID> opponents = mySide == 1 ? session.getAliveB() : session.getAliveA();
         for (UUID uuid : opponents) {
