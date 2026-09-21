@@ -1,5 +1,7 @@
 package xyz.yourserver.duels;
 
+import de.eisi05.npc.api.NpcApi;
+import de.eisi05.npc.api.objects.NpcConfig;
 import org.bukkit.plugin.java.JavaPlugin;
 import xyz.yourserver.duels.command.DuelArenaCommand;
 import xyz.yourserver.duels.command.DuelCommand;
@@ -32,6 +34,11 @@ public class DuelsPlugin extends JavaPlugin {
 
         getDataFolder().mkdirs();
 
+        // NpcAPI is shaded directly into this jar, so it needs to be
+        // initialized/torn down here rather than relying on a separate
+        // NPC plugin being installed on the server.
+        NpcApi.createInstance(this, new NpcConfig().debug(false).autoUpdate(false));
+
         kitManager = new KitManager(this);
         arenaManager = new ArenaManager(this);
         duelManager = new DuelManager(this);
@@ -50,15 +57,13 @@ public class DuelsPlugin extends JavaPlugin {
         if (!SchematicUtil.isAvailable()) {
             getLogger().warning("WorldEdit/FAWE not found — arena auto-restore will fail until it's installed.");
         }
-        if (!BotManager.isCitizensAvailable()) {
-            getLogger().warning("Citizens not found — /duel bot will fail until it's installed.");
-        }
 
         getLogger().info("DuelsPlugin enabled.");
     }
 
     @Override
     public void onDisable() {
+        NpcApi.disable();
         getLogger().info("DuelsPlugin disabled.");
     }
 

@@ -2,7 +2,7 @@ name: DuelsPlugin
 version: '1.0.0'
 main: xyz.yourserver.duels.DuelsPlugin
 api-version: '1.21'
-softdepend: [WorldEdit, FastAsyncWorldEdit, Citizens]
+softdepend: [WorldEdit, FastAsyncWorldEdit]
 author: YourServer
 
 commands:

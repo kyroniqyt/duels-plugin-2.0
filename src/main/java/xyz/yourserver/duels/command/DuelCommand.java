@@ -60,10 +60,6 @@ public class DuelCommand implements CommandExecutor {
                 plugin.getQueueManager().join(player, kit);
             }
             case "bot" -> {
-                if (!xyz.yourserver.duels.bot.BotManager.isCitizensAvailable()) {
-                    Msg.send(player, "&cBots require the Citizens plugin, which isn't installed on this server.");
-                    return true;
-                }
                 if (plugin.getDuelManager().inSession(player)) {
                     Msg.send(player, "&cYou're already in a duel.");
                     return true;
@@ -84,7 +80,7 @@ public class DuelCommand implements CommandExecutor {
                     }
                 }
 
-                var bot = plugin.getBotManager().spawnBot(player.getLocation(), xyz.yourserver.duels.bot.BotDifficulty.EASY);
+                var bot = plugin.getBotManager().spawnBot(xyz.yourserver.duels.bot.BotDifficulty.EASY);
                 boolean started = plugin.getDuelManager().startSession(
                         java.util.List.of(player.getUniqueId()), java.util.List.of(bot.getEntityUuid()), false, kit);
                 if (!started) {
