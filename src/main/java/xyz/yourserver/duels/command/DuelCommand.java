@@ -25,7 +25,7 @@ public class DuelCommand implements CommandExecutor {
         }
 
         if (args.length == 0) {
-            Msg.send(player, "&7Usage: /duel <player> [kit] | /duel accept | /duel deny | /duel queue <kit> | /duel leavequeue | /duel bot [kit] | /duel kits");
+            Msg.send(player, "&7Usage: /duel <player> [kit] | /duel accept | /duel deny | /duel queue <kit> | /duel leavequeue | /duel kits");
             return true;
         }
 
@@ -58,34 +58,6 @@ public class DuelCommand implements CommandExecutor {
                     return true;
                 }
                 plugin.getQueueManager().join(player, kit);
-            }
-            case "bot" -> {
-                if (plugin.getDuelManager().inSession(player)) {
-                    Msg.send(player, "&cYou're already in a duel.");
-                    return true;
-                }
-
-                Kit kit;
-                if (args.length >= 2) {
-                    kit = plugin.getKitManager().getKit(args[1]);
-                    if (kit == null) {
-                        Msg.send(player, "&cNo such kit. Use /duel kits to see options.");
-                        return true;
-                    }
-                } else {
-                    kit = plugin.getKitManager().getKits().values().stream().findFirst().orElse(null);
-                    if (kit == null) {
-                        Msg.send(player, "&cNo kits exist yet — ask an admin to create one with /duelkit create <name>.");
-                        return true;
-                    }
-                }
-
-                var bot = plugin.getBotManager().spawnBot(xyz.yourserver.duels.bot.BotDifficulty.EASY);
-                boolean started = plugin.getDuelManager().startSession(
-                        java.util.List.of(player.getUniqueId()), java.util.List.of(bot.getEntityUuid()), false, kit);
-                if (!started) {
-                    plugin.getBotManager().removeBot(bot);
-                }
             }
             default -> {
                 Player target = Bukkit.getPlayer(args[0]);

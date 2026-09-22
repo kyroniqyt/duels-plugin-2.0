@@ -20,11 +20,9 @@ public class DuelListener implements Listener {
     }
 
     /**
-     * Blocks PvP outside of active duels, and — this is the core trick —
-     * intercepts damage that would be lethal to a dueling player and turns
-     * it into an elimination instead of a real death. Bot combat is handled
-     * separately, directly through the bot's own click event (see DuelBot),
-     * since bots have no real Bukkit entity to fire damage events for.
+     * Blocks PvP outside of active duels, and — the core trick — intercepts
+     * damage that would be lethal to a dueling player and turns it into an
+     * elimination instead of a real death.
      */
     @EventHandler(priority = EventPriority.HIGH)
     public void onDamage(EntityDamageEvent event) {
@@ -42,8 +40,6 @@ public class DuelListener implements Listener {
             }
         }
 
-        // Environmental damage (fall, fire, etc.) during an active duel also
-        // counts toward elimination — only player-vs-player is gated above.
         if (session != null && session.getState() == DuelState.ACTIVE) {
             double healthAfter = player.getHealth() - event.getFinalDamage();
             if (healthAfter <= 0) {

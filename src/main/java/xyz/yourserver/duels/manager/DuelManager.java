@@ -6,8 +6,11 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
+import org.bukkit.Location;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import xyz.yourserver.duels.DuelsPlugin;
 import xyz.yourserver.duels.model.Arena;
 import xyz.yourserver.duels.model.DuelSession;
@@ -63,6 +66,7 @@ public class DuelManager {
                         .decorate(TextDecoration.BOLD)
                         .clickEvent(ClickEvent.runCommand("/duel deny")));
         target.sendMessage(challengeMsg);
+        target.playSound(target.getLocation(), Sound.UI_BUTTON_CLICK, 1.0f, 1.0f);
 
         Msg.send(challenger, "&7Challenge sent to &e" + target.getName() + "&7.");
     }
@@ -86,6 +90,8 @@ public class DuelManager {
             Msg.send(target, "&cOne of you is already in a duel.");
             return;
         }
+        target.playSound(target.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f);
+        challenger.playSound(challenger.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1.0f, 1.0f);
         startSession(List.of(challenger.getUniqueId()), List.of(target.getUniqueId()), false, challenge.kit);
     }
 
@@ -113,8 +119,8 @@ public class DuelManager {
     }
 
     /**
-     * Starts a match. Works identically for 1v1 (singleton lists), party
-     * duels (multi-member lists), and FFA (sideB empty, ffa=true).
+     * Starts a match. Works identically for 1v1 (singleton lists) and party
+     * duels/FFA (multi-member lists, sideB empty for FFA).
      * Returns true if a match actually started (i.e. an arena was free).
      */
     public boolean startSession(List<UUID> sideA, List<UUID> sideB, boolean ffa, Kit kit) {
@@ -143,10 +149,9 @@ public class DuelManager {
         session.setState(DuelState.COUNTDOWN);
         int seconds = plugin.getConfig().getInt("countdown-seconds", 5);
 
-        // teleport + equip immediately so players can see each other during the countdown
         teleportAndEquip(session);
 
-        org.bukkit.scheduler.BukkitTask task = new BukkitRunnable() {
+        BukkitTask task = new BukkitRunnable() {
             int remaining = seconds;
 
             @Override
@@ -154,7 +159,7 @@ public class DuelManager {
                 if (remaining <= 0) {
                     session.setState(DuelState.ACTIVE);
                     broadcast(session, "&aFight!");
-                    engageBots(session);
+                    playSoundToAll(session, Sound.ENTITY_PLAYER_LEVELUP);
                     cancel();
                     return;
                 }
@@ -164,16 +169,6 @@ public class DuelManager {
         }.runTaskTimer(plugin, 0L, 20L);
 
         session.setActiveTask(task);
-    }
-
-    /** Bots don't start chasing/attacking until the countdown actually ends. */
-    private void engageBots(DuelSession session) {
-        for (UUID uuid : session.allParticipants()) {
-            var bot = plugin.getBotManager().getBotByUuid(uuid);
-            if (bot != null) {
-                bot.engage();
-            }
-        }
     }
 
     private void teleportAndEquip(DuelSession session) {
@@ -186,12 +181,7 @@ public class DuelManager {
         }
     }
 
-    private void setUpParticipant(UUID uuid, DuelSession session, org.bukkit.Location spawn) {
-        var bot = plugin.getBotManager().getBotByUuid(uuid);
-        if (bot != null) {
-            bot.prepareForMatch(plugin, session, spawn);
-            return;
-        }
+    private void setUpParticipant(UUID uuid, DuelSession session, Location spawn) {
         Player p = Bukkit.getPlayer(uuid);
         if (p == null) return;
         p.teleport(spawn);
@@ -215,45 +205,15 @@ public class DuelManager {
         DuelSession session = getSession(player);
         if (session == null || session.getState() != DuelState.ACTIVE) return;
 
-        int side = session.sideOf(player.getUniqueId());
-        if (side == 1) session.getAliveA().remove(player.getUniqueId());
-        if (side == 2) session.getAliveB().remove(player.getUniqueId());
+        UUID uuid = player.getUniqueId();
+        int side = session.sideOf(uuid);
+        if (side == 1) session.getAliveA().remove(uuid);
+        if (side == 2) session.getAliveB().remove(uuid);
 
         player.setHealth(player.getMaxHealth());
         player.setGameMode(GameMode.SPECTATOR);
         broadcast(session, "&c" + player.getName() + " &7has been eliminated.");
-
-        if (session.isMatchOver()) {
-            finishSession(session);
-        }
-    }
-
-    /**
-     * Called by the combat listener when a bot would otherwise die. Bot
-     * health is tracked here rather than relying on the NPC entity's real
-     * health, so elimination behaves identically to a real player's.
-     */
-    public void damageBot(xyz.yourserver.duels.bot.DuelBot bot, double amount) {
-        DuelSession session = bot.getSession();
-        if (session == null || session.getState() != DuelState.ACTIVE) return;
-
-        bot.setHealth(bot.getHealth() - amount);
-        if (bot.getHealth() <= 0) {
-            handleBotElimination(bot);
-        }
-    }
-
-    public void handleBotElimination(xyz.yourserver.duels.bot.DuelBot bot) {
-        DuelSession session = bot.getSession();
-        if (session == null || session.getState() != DuelState.ACTIVE) return;
-
-        UUID botUuid = bot.getEntityUuid();
-        int side = session.sideOf(botUuid);
-        if (side == 1) session.getAliveA().remove(botUuid);
-        if (side == 2) session.getAliveB().remove(botUuid);
-
-        bot.disengage();
-        broadcast(session, "&c" + bot.getDisplayName() + " &7has been eliminated.");
+        playSoundToAll(session, Sound.ENTITY_PLAYER_DEATH);
 
         if (session.isMatchOver()) {
             finishSession(session);
@@ -278,7 +238,6 @@ public class DuelManager {
             broadcast(session, "&7Duel ended in a draw.");
         }
 
-        // give everyone a moment to see the result, then clean up + restore arena
         Bukkit.getScheduler().runTaskLater(plugin, () -> cleanupSession(session), 60L);
     }
 
@@ -286,16 +245,15 @@ public class DuelManager {
         Arena arena = session.getArena();
         for (UUID uuid : session.allParticipants()) {
             playerSessions.remove(uuid);
-            var bot = plugin.getBotManager().getBotByUuid(uuid);
-            if (bot != null) {
-                plugin.getBotManager().removeBot(bot);
-                continue;
-            }
             Player p = Bukkit.getPlayer(uuid);
             if (p != null) {
                 p.setGameMode(GameMode.SURVIVAL);
                 p.getInventory().clear();
-                p.teleport(plugin.getServer().getWorlds().get(0).getSpawnLocation());
+                // Run the server's own /spawn command rather than guessing a
+                // location ourselves — this respects whatever spawn plugin
+                // (EssentialsSpawn, etc.) actually controls where players land,
+                // instead of the raw vanilla world spawn point.
+                p.performCommand("spawn");
             }
         }
 
@@ -320,6 +278,15 @@ public class DuelManager {
     private void broadcast(DuelSession session, String message) {
         for (UUID uuid : session.allParticipants()) {
             Msg.send(Bukkit.getPlayer(uuid), message);
+        }
+    }
+
+    private void playSoundToAll(DuelSession session, Sound sound) {
+        for (UUID uuid : session.allParticipants()) {
+            Player p = Bukkit.getPlayer(uuid);
+            if (p != null) {
+                p.playSound(p.getLocation(), sound, 1.0f, 1.0f);
+            }
         }
     }
 
