@@ -18,6 +18,9 @@ commands:
   party:
     description: Party management and party duels/FFA
     usage: /party <create|invite|accept|leave|kick|ffa|duel> [target/kit]
+  duelmenu:
+    description: Open the duel menu GUI
+    usage: /duelmenu
 
 permissions:
   duels.admin:

@@ -249,6 +249,7 @@ public class DuelManager {
             if (p != null) {
                 p.setGameMode(GameMode.SURVIVAL);
                 p.getInventory().clear();
+                p.getInventory().setItem(8, plugin.getDuelMenu().menuItem());
                 // Run the server's own /spawn command rather than guessing a
                 // location ourselves — this respects whatever spawn plugin
                 // (EssentialsSpawn, etc.) actually controls where players land,
